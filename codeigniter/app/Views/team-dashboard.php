@@ -135,131 +135,143 @@
     <script src="http://localhost:4000/socket.io/socket.io.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
-    const socket = io("http://localhost:4000");
+        const socket = io("http://localhost:4000");
 
-    const token = localStorage.getItem("token");
-    const userId = sessionStorage.getItem("Id");
-    const userName = sessionStorage.getItem("name");
+        const token = localStorage.getItem("token");
+        const userId = sessionStorage.getItem("Id");
+        const userName = sessionStorage.getItem("name");
 
-    if (!token || !userId) {
-        alert("User is not authenticated. Please log in again.");
-        window.location.href = "/login";
-    }
-
-    const getAuthHeaders = () => ({
-        "Authorization": `Bearer ${token}`,
-        "Content-Type": "application/json",
-    });
-
-    async function loadMyTasks() {
-        try {
-            const response = await fetch(`http://localhost:4000/api/tasks?assignee=${userId}`, {
-                headers: getAuthHeaders(),
-            });
-            if (!response.ok) {
-                throw new Error("Failed to fetch tasks");
-            }
-            const tasks = await response.json();
-            const tasksDiv = document.getElementById("myTasks");
-            tasksDiv.innerHTML = tasks
-                .map(
-                    (task) => `
-                <div class="bg-gray-100 p-4 mb-4 rounded shadow-md">
-                    <h4 class="text-xl font-semibold">${task.title}</h4>
-                    <p class="text-gray-700">${task.description}</p>
-                    <p class="text-gray-700">${task.deadline}</p>
-                    <p class="text-gray-700">${task.priority}</p>
-                    <p>Status: 
-                        <select onchange="updateTaskStatus('${task._id}', this.value)" class="mt-2 p-2 border rounded">
-                            <option value="pending" ${task.status === 'pending' ? 'selected' : ''}>Pending</option>
-                            <option value="in_progress" ${task.status === 'in_progress' ? 'selected' : ''}>In Progress</option>
-                            <option value="completed" ${task.status === 'completed' ? 'selected' : ''}>Completed</option>
-                        </select>
-                    </p>
-                    <textarea data-task="${task._id}" placeholder="Add a comment" class="w-full mt-2 p-2 border rounded"></textarea>
-                    <button onclick="addComment('${task._id}')" class="mt-2 bg-blue-500 text-white p-2 rounded">Add Comment</button>
-                </div>`
-                )
-                .join("");
-        } catch (err) {
-            console.error(err);
-            alert("Error loading tasks: " + err.message);
+        if (!token || !userId) {
+            alert("User is not authenticated. Please log in again.");
+            window.location.href = "/login";
         }
-    }
 
-    async function addComment(taskId) {
-        const commentInput = document.querySelector(`[data-task="${taskId}"]`);
-        try {
-            const response = await fetch(`/api/tasks/${taskId}/comments`, {
-                method: "POST",
-                headers: getAuthHeaders(),
-                body: JSON.stringify({ comment: commentInput.value, user: userId }),
-            });
-            if (!response.ok) {
-                throw new Error("Failed to add comment");
+        const getAuthHeaders = () => ({
+            "Authorization": `Bearer ${token}`,
+            "Content-Type": "application/json",
+        });
+
+        async function loadMyTasks() {
+            try {
+                const response = await fetch(`http://localhost:4000/api/tasks?assignee=${userId}`, {
+                    method: "GET",
+                    headers: getAuthHeaders(),
+                });
+                if (!response.ok) {
+                    throw new Error("Failed to fetch tasks");
+                }
+                const tasks = await response.json();
+                const tasksDiv = document.getElementById("myTasks");
+                tasksDiv.innerHTML = tasks
+                    .map((task) => `
+                        <div class="bg-gray-100 p-4 mb-4 rounded shadow-md">
+                            <h4 class="text-xl font-semibold">${task.title}</h4>
+                            <p class="text-gray-700">${task.description}</p>
+                            <p class="text-gray-700">${task.deadline}</p>
+                            <p class="text-gray-700">${task.priority}</p>
+                            <p>Status: 
+                                <select onchange="updateTaskStatus('${task._id}', this.value)" class="mt-2 p-2 border rounded">
+                                    <option value="pending" ${task.status === 'pending' ? 'selected' : ''}>Pending</option>
+                                    <option value="in_progress" ${task.status === 'in_progress' ? 'selected' : ''}>In Progress</option>
+                                    <option value="completed" ${task.status === 'completed' ? 'selected' : ''}>Completed</option>
+                                </select>
+                            </p>
+                            <textarea data-task="${task._id}" placeholder="Add a comment" class="w-full mt-2 p-2 border rounded"></textarea>
+                            <button onclick="addComment('${task._id}')" class="mt-2 bg-blue-500 text-white p-2 rounded">Add Comment</button>
+                        </div>
+                    `)
+                    .join("");
+            } catch (err) {
+                console.error(err);
+                alert("Error loading tasks: " + err.message);
             }
-            alert("Comment added successfully!");
+        }
+
+        async function addComment(taskId) {
+            const commentInput = document.querySelector(`[data-task="${taskId}"]`);
+            try {
+                const response = await fetch(`/api/tasks/${taskId}/comments`, {
+                    method: "POST",
+                    headers: getAuthHeaders(),
+                    body: JSON.stringify({ comment: commentInput.value, user: userId }),
+                });
+                if (!response.ok) {
+                    throw new Error("Failed to add comment");
+                }
+                alert("Comment added successfully!");
+                loadMyTasks();
+            } catch (err) {
+                console.error(err);
+                alert("Error adding comment: " + err.message);
+            }
+        }
+
+        async function updateTaskStatus(taskId, status) {
+            try {
+                const response = await fetch(`http://localhost:4000/api/tasks/${taskId}/status`, {
+                    method: "PUT",
+                    headers: getAuthHeaders(),
+                    body: JSON.stringify({ status }),
+                });
+                if (!response.ok) {
+                    throw new Error("Failed to update status");
+                }
+                const updatedTask = await response.json();
+                alert(`Task status updated to ${updatedTask.task.status}`);
+            } catch (err) {
+                console.error(err);
+                alert("Error updating task status: " + err.message);
+            }
+        }
+
+        function sendMessage() {
+            const chatInput = document.getElementById("chatInput");
+            const message = chatInput.value.trim();
+            if (message) {
+                socket.emit("sendMessage", { message, sender: userName });
+                chatInput.value = "";
+            } else {
+                alert("Message cannot be empty!");
+            }
+        }
+
+        socket.on("taskCreated", () => {
+            console.log("New task created, reloading tasks...");
             loadMyTasks();
-        } catch (err) {
-            console.error(err);
-            alert("Error adding comment: " + err.message);
+        });
+
+        socket.on("taskStatusUpdated", () => {
+            console.log("Task status updated, reloading tasks...");
+            loadMyTasks();
+        });
+
+        socket.on("taskDeleted", () => {
+            console.log("Task deleted, reloading tasks...");
+            loadMyTasks();
+        });
+
+        socket.on("taskAssigned", () => {
+            console.log("Task assigned to you, reloading tasks...");
+            loadMyTasks();
+        });
+
+        socket.on("receiveMessage", (message) => {
+            const chatDiv = document.getElementById("chat");
+            const alignment = message.sender === userName ? "text-left" : "text-right";
+            chatDiv.innerHTML += `<p class="${alignment} p-2"><strong>${message.sender}:</strong> ${message.text}</p>`;
+            chatDiv.scrollTop = chatDiv.scrollHeight;
+        });
+
+        function logout() {
+            localStorage.removeItem("token");
+            sessionStorage.removeItem("Id");
+            sessionStorage.removeItem("role");
+            sessionStorage.removeItem("name");
+            sessionStorage.removeItem("email");
+            window.location.href = "/login";
         }
-    }
 
-    async function updateTaskStatus(taskId, status) {
-        try {
-            const response = await fetch(`http://localhost:4000/api/tasks/${taskId}/status`, {
-                method: "PUT",
-                headers: getAuthHeaders(),
-                body: JSON.stringify({ status }),
-            });
-            if (!response.ok) {
-                throw new Error("Failed to update status");
-            }
-            const updatedTask = await response.json();
-            alert(`Task status updated to ${updatedTask.task.status}`);
-        } catch (err) {
-            console.error(err);
-            alert("Error updating task status: " + err.message);
-        }
-    }
-
-    function sendMessage() {
-        const chatInput = document.getElementById("chatInput");
-        const message = chatInput.value.trim();
-        if (message) {
-            socket.emit("sendMessage", { message, sender: userName });
-            chatInput.value = "";
-        } else {
-            alert("Message cannot be empty!");
-        }
-    }
-
-    socket.on("taskStatusUpdated", (task) => {
-        alert(`Task Updated: ${task.title} is now ${task.status}`);
-    });
-
-    socket.on("newComment", (comment) => {
-        alert(`New Comment on Task: ${comment.comment}`);
-    });
-
-    socket.on("receiveMessage", (message) => {
-        const chatDiv = document.getElementById("chat");
-        const alignment = message.sender === userName ? "text-left" : "text-right";
-        chatDiv.innerHTML += `<p class="${alignment} p-2"><strong>${message.sender}:</strong> ${message.text}</p>`;
-        chatDiv.scrollTop = chatDiv.scrollHeight;
-    });
-
-    function logout() {
-        localStorage.removeItem("token");
-        sessionStorage.removeItem("Id");
-        sessionStorage.removeItem("role");
-        sessionStorage.removeItem("name");
-        sessionStorage.removeItem("email");
-        window.location.href = "/login";
-    }
-
-    loadMyTasks();
+        loadMyTasks();
     </script>
 </head>
 <body class="bg-gray-50">
